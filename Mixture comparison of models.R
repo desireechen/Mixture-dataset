@@ -68,13 +68,137 @@ df.test$pred.knn9 <- knn9
 table(df.test$pred.knn9, df.test$y)
 
 ## Logistic Regression classification.
-# Fit a Logistic Regression model with 7th-order polynomials.
-lr7 <- glm(y ~ poly(x1,7) + poly(x2,7), data=df.train, family=binomial())
-summary(lr7)
+# Fit a Logistic Regression model with 5th-order polynomials.
+lr5 <- glm(y ~ poly(x1,5) + poly(x2,5), data=df.train, family=binomial())
+summary(lr5)
 # Plot the decision boundary of lr model.
-df.grid$prob.lr7 <- predict(lr7, newdata=df.grid, type="response")
-ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_color_manual(values=c("green", "red")) + theme_bw() + stat_contour(data=df.grid, aes(x=x1, y=x2, z=prob.lr7), breaks=c(0.5))
+df.grid$prob.lr5 <- predict(lr5, newdata=df.grid, type="response")
+ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_color_manual(values=c("green", "red")) + theme_bw() + stat_contour(data=df.grid, aes(x=x1, y=x2, z=prob.lr5), breaks=c(0.5))
 # Predict using the lr model.
-df.test$prob.lr7 <- predict(lr7, newdata=df.test, type="response")
-df.test$pred.lr7 <- as.factor(ifelse(df.test$prob.lr7 > 0.5, 1, 0))
-table(df.test$pred.lr7, df.test$y)
+df.test$prob.lr5 <- predict(lr5, newdata=df.test, type="response")
+df.test$pred.lr5 <- as.factor(ifelse(df.test$prob.lr5 > 0.5, 1, 0))
+table(df.test$pred.lr5, df.test$y)
+
+## Decision Tree.
+library("tree")
+tree1 <- tree(y ~ ., data=df.train)
+# View details of each decision node. Asterisks are the terminal nodes or leaves.
+tree1
+summary(tree1)
+# Plot the tree before cross-validation.
+plot(tree1)
+text(tree1)
+# Use cross-validation to determine optimal tree size.
+set.seed(6789)
+tree1.cv <- cv.tree(tree1, method="misclass")
+tree1.cv
+plot(tree1.cv)
+optimal <- which.min(tree1.cv$dev)
+optimal.size <- tree1.cv$size[optimal]
+# Prune the tree using the optimal tree size determined by cross-validation.
+tree1.prune <- prune.tree(tree1, best=optimal.size, method="misclass")
+# tree1.prune
+# summary(tree1.prune)
+# plot(tree1.prune)
+# text(tree1.prune)
+# Plot the partition. We can see the leaves determined by the pruned tree.
+# plot(df.train$x1, df.train$x2, col=ifelse(df.train$y==1, 2, 3), pch=20, cex=2)
+# partition.tree(tree1.prune, ordvars=c("x1", "x2"), add=TRUE)
+# Plot the decision boundary of the pruned tree model.
+# df.grid$prob.tree <- predict(tree1.prune, newdata=df.grid, type="vector")[, 2]
+# ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_color_manual(values=c("green", "red")) + theme_bw() + stat_contour(data=df.grid, aes(x=x1, y=x2, z=prob.tree), breaks=c(0.5))
+# Predict using the pruned tree model.
+df.test$prob.tree <- predict(tree1.prune, newdata=df.test, type="vector")[, 2]
+df.test$pred.tree <- predict(tree1.prune, newdata=df.test, type="class")
+# table(df.test$pred.tree, df.test$y)
+
+## Random Forest
+library("randomForest")
+set.seed(9876)
+rf <- randomForest(y ~ ., data=df.train, mtry=1, ntree=500, xtest=df.test[, 1:2], y.test=df.test[, 3], keep.forest=TRUE)
+plot(rf)
+# Partial dependence plots
+partialPlot(rf, df.train, x.var="x1", which.class="1")
+partialPlot(rf, df.train, x.var="x2", which.class="1")
+# Plot the decision boundary of the Random Forest model.
+# df.grid$prob.rf <- predict(rf, newdata=df.grid, type="prob")[, 2]
+# ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_color_manual(values=c("green", "red")) + theme_bw() + stat_contour(data=df.grid, aes(x=x1, y=x2, z=prob.rf), breaks=c(0.5))
+# Predict using the random forest model.
+df.test$prob.rf <- rf$test$votes[ ,2]
+df.test$pred.rf <- rf$test$predicted
+# table(df.test$pred.rf, df.test$y)
+
+## Bagging (this is randomForest when mtry is equal to the number of variables in x)
+set.seed(9876)
+bag <- randomForest(y ~ ., data=df.train, mtry=2, ntree=500, xtest=df.test[, 1:2], y.test=df.test[, 3], keep.forest=TRUE)
+# plot(bag)
+# Plot the decision boundary of the bagging model.
+# df.grid$prob.bag <- predict(bag, newdata=df.grid, type="prob")[, 2]
+# ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_color_manual(values=c("green", "red")) + theme_bw() + stat_contour(data=df.grid, aes(x=x1, y=x2, z=prob.bag), breaks=c(0.5))
+# Predict using the bagging model.
+df.test$prob.bag <- bag$test$votes[ ,2]
+df.test$pred.bag <- bag$test$predicted
+# table(df.test$pred.bag, df.test$y)
+
+## Gradient Boosting Machine
+library("gbm")
+y.train <- as.numeric(df.train$y) - 1
+set.seed(9876)
+boost <- gbm(y.train ~ x1 + x2, data=df.train, distribution="bernoulli", n.trees=5000, shrinkage=0.001, interaction.depth=4)
+gbm.perf(boost)
+# Partial effects of each variable
+plot(boost, i=1, type="response")
+plot(boost, i=2, type="response")
+# Plot the decision boundary of the GBM.
+# df.grid$prob.gbm <- predict(boost, newdata=df.grid, n.trees=5000, type="response")
+# ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_color_manual(values=c("green", "red")) + theme_bw() + stat_contour(data=df.grid, aes(x=x1, y=x2, z=prob.gbm), breaks=c(0.5))
+df.test$prob.gbm <- predict(boost, newdata=df.test, n.trees=5000, type="response")
+df.test$pred.gbm <- as.factor(ifelse(df.test$prob.gbm > 0.5, 1, 0))
+# table(df.test$pred.gbm, df.test$y)
+
+# Compare error rates, ROC and AUC values.
+library('ROCR')
+# Create prediction objects.
+knn.pred <- prediction(df.test$prob.knn9, df.test$y)
+lr.pred <- prediction(df.test$prob.lr5, df.test$y)
+tree.pred <- prediction(df.test$prob.tree, df.test$y)
+rf.pred <- prediction(df.test$prob.rf, df.test$y)
+bag.pred <- prediction(df.test$prob.bag, df.test$y)
+gbm.pred <- prediction(df.test$prob.gbm, df.test$y)
+# Create performance objects for the misclassification errors.
+knn.error <- performance(knn.pred, measure="err")
+lr.error <- performance(lr.pred, measure="err")
+tree.error <- performance(tree.pred, measure="err")
+rf.error <- performance(rf.pred, measure="err")
+bag.error <- performance(bag.pred, measure="err")
+gbm.error <- performance(gbm.pred, measure="err")
+# Plot misclassification errors.
+plot(knn.error, ylim=c(0.2,0.5), col="red")
+plot(lr.error, add=TRUE, col="yellow")
+plot(tree.error, add=TRUE, col="green")
+plot(rf.error, add=TRUE, col="purple")
+plot(bag.error, add=TRUE, col="blue")
+plot(gbm.error, add=TRUE, col="grey")
+abline(h=bayes.error, lty=2)
+# Create performance objects for the ROCs.
+knn.ROC <- performance(knn.pred, measure="tpr", x.measure="fpr")
+lr.ROC <- performance(lr.pred, measure="tpr", x.measure="fpr")
+tree.ROC <- performance(tree.pred, measure="tpr", x.measure="fpr")
+rf.ROC <- performance(rf.pred, measure="tpr", x.measure="fpr")
+bag.ROC <- performance(bag.pred, measure="tpr", x.measure="fpr")
+gbm.ROC <- performance(gbm.pred, measure="tpr", x.measure="fpr")
+# Plot ROC curves.
+plot(knn.ROC, col="red")
+plot(lr.ROC, add=TRUE, col="yellow")
+plot(tree.ROC, add=TRUE, col="green")
+plot(rf.ROC, add=TRUE, col="purple", lwd=2)
+plot(bag.ROC, add=TRUE, col="blue")
+plot(gbm.ROC, add=TRUE, col="grey")
+abline(a=0, b=1, lty=2)
+# AUC values
+as.numeric(performance(knn.pred, "auc")@y.values)
+as.numeric(performance(lr.pred, "auc")@y.values)
+as.numeric(performance(tree.pred, "auc")@y.values)
+as.numeric(performance(rf.pred, "auc")@y.values)
+as.numeric(performance(bag.pred, "auc")@y.values)
+as.numeric(performance(gbm.pred, "auc")@y.values)
