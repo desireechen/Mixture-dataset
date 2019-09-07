@@ -41,7 +41,7 @@ x.test <- x.test + means
 # replicate zeros and ones 5000 times each
 y.test <- c(rep(0, 5000), rep(1, 5000)) 
 # Make a dataframe containing the 10000 test values.
-df.test <- data.frame(x1=x.test[ ,1], x2=x.test[ ,2], y=y)
+df.test <- data.frame(x1=x.test[ ,1], x2=x.test[ ,2], y=y.test)
 df.test$y <- as.factor(df.test$y)
 summary(df.test)
 
@@ -77,7 +77,7 @@ ggplot() + geom_point(data=df.train, aes(x=x1, y=x2, color=y), size=4) + scale_c
 # Predict using the lr model.
 df.test$prob.lr5 <- predict(lr5, newdata=df.test, type="response")
 df.test$pred.lr5 <- as.factor(ifelse(df.test$prob.lr5 > 0.5, 1, 0))
-table(df.test$pred.lr5, df.test$y)
+# table(df.test$pred.lr5, df.test$y)
 
 ## Decision Tree.
 library("tree")
